@@ -1,0 +1,26 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "extract-structured-info",
+  "version": "1.0.0",
+  "kind_id": "extract-structured-info@1.0.0",
+  "title": "Extract FLOP settlement fields from a protocol note",
+  "summary": "Read a local fixture note and extract payment_mode, tclk_mode, settlement_execution, and operator_relationship.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "source_url": "https://github.com/greg2718/flop-work-exchange",
+  "notes": "source_url is inert metadata. Do not fetch or clone it.",
+  "fixture": {
+    "source": "local-inline",
+    "text": "FLOP Work Exchange records operator_relationship on every deal. payment_mode is paper. TCLK planning is SIMULATION_ONLY. settlement_execution is DISABLED. Same-operator family DIDs are not independent peers."
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "extract-structured-info",
+    "expected": {
+      "payment_mode": "paper",
+      "tclk_mode": "SIMULATION_ONLY",
+      "settlement_execution": "DISABLED",
+      "operator_relationship": "same_operator"
+    }
+  }
+}

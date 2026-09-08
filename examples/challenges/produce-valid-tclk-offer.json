@@ -1,0 +1,23 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "produce-valid-tclk-offer",
+  "version": "1.0.0",
+  "kind_id": "produce-valid-tclk-offer@1.0.0",
+  "title": "Produce a SIMULATION_ONLY paper TCLK offer",
+  "summary": "Submit a TCLK offer object that is paper-only: SIMULATION_ONLY, settlement_execution DISABLED.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "notes": "This challenge never locks funds, never posts to Technocore, and never executes settlement.",
+  "fixture": {
+    "source": "local-inline",
+    "constraints": {
+      "payment_mode": "paper",
+      "tclk_mode": "SIMULATION_ONLY",
+      "settlement_execution": "DISABLED"
+    }
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "produce-valid-tclk-offer"
+  }
+}

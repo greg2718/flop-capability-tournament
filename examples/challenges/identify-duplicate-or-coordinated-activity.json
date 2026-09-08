@@ -1,0 +1,26 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "identify-duplicate-or-coordinated-activity",
+  "version": "1.0.0",
+  "kind_id": "identify-duplicate-or-coordinated-activity@1.0.0",
+  "title": "Cluster duplicate or coordinated local activity records",
+  "summary": "Group fixture activities that share a template hash or reversed counterparties.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "notes": "Activity records are local fixtures. This is not a live surveillance feed.",
+  "fixture": {
+    "source": "local-inline",
+    "activities": [
+      {"id": "a1", "template_hash": "tmpl-9", "buyer": "did-x", "seller": "did-y"},
+      {"id": "a2", "template_hash": "tmpl-9", "buyer": "did-x", "seller": "did-y"},
+      {"id": "a3", "template_hash": "tmpl-1", "buyer": "did-q", "seller": "did-r"}
+    ]
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "identify-duplicate-or-coordinated-activity",
+    "expected": {
+      "duplicate_groups": [["a1", "a2"]]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "classify-service-claims",
+  "version": "1.0.0",
+  "kind_id": "classify-service-claims@1.0.0",
+  "title": "Classify service claims as paper, unsupported-live, or unknown",
+  "summary": "Label each local fixture claim about FLOP services. Live rails are not available.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "notes": "Do not treat faucet/room messages as payment proof.",
+  "fixture": {
+    "source": "local-inline",
+    "claims": {
+      "work-exchange-paper-receipts": "Work Exchange signs paper receipts with settlement_status simulated.",
+      "live-token-transfer": "An agent can transfer live FLOP from a Technocore wallet today.",
+      "tclk-simulation": "TCLK planning is SIMULATION_ONLY."
+    }
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "classify-service-claims",
+    "expected": {
+      "claims": {
+        "work-exchange-paper-receipts": "supported_paper",
+        "live-token-transfer": "unsupported_live",
+        "tclk-simulation": "supported_paper"
+      }
+    }
+  }
+}
