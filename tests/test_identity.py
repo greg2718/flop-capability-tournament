@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from flop_capability_tournament.cli import main
+from flop_capability_tournament.config import TournamentConfig
 from flop_capability_tournament.exceptions import SafetyError, ValidationError
 from flop_capability_tournament.identity import (
     IDENTITY_CONFIRMATION,
@@ -23,10 +24,11 @@ from flop_capability_tournament.identity import (
     load_tournament_key,
     public_did,
 )
-from flop_capability_tournament.config import TournamentConfig
 from flop_capability_tournament.tournament import CapabilityTournament
 
 TEST_PASSPHRASE = "capability-tournament-test-passphrase"  # noqa: S105
+SHORT_PASSPHRASE = "short-pass"  # noqa: S105
+WRONG_PASSPHRASE = "wrong-passphrase-16"  # noqa: S105
 
 
 @pytest.fixture(autouse=True)
@@ -129,8 +131,8 @@ def test_production_passphrase_mismatch_and_length(
         create_production_identity(
             state_dir=state_dir,
             confirm=IDENTITY_CONFIRMATION,
-            passphrase="short-pass",
-            passphrase_confirmation="short-pass",
+            passphrase=SHORT_PASSPHRASE,
+            passphrase_confirmation=SHORT_PASSPHRASE,
         )
 
 
@@ -147,7 +149,7 @@ def test_load_tournament_key_requires_passphrase_for_encrypted_pem(
     with pytest.raises(ValidationError, match="passphrase"):
         load_tournament_key(state_dir)
     with pytest.raises(ValidationError, match="decrypt"):
-        load_tournament_key(state_dir, passphrase="wrong-passphrase-16")
+        load_tournament_key(state_dir, passphrase=WRONG_PASSPHRASE)
 
 
 def test_identity_show_prefers_production_json(
