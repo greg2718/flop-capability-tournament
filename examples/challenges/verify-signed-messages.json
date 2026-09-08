@@ -1,0 +1,28 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "verify-signed-messages",
+  "version": "1.0.0",
+  "kind_id": "verify-signed-messages@1.0.0",
+  "title": "Verify local signed-message fixtures",
+  "summary": "Decide which locally supplied messages have valid signatures. No network, no wallet.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "notes": "Signatures in the fixture are evaluation data only.",
+  "fixture": {
+    "source": "local-inline",
+    "messages": [
+      {"id": "m1", "note": "canonical payload matches the attached signature"},
+      {"id": "m2", "note": "payload was altered after signing"}
+    ]
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "verify-signed-messages",
+    "expected": {
+      "verdicts": [
+        {"id": "m1", "valid": true},
+        {"id": "m2", "valid": false}
+      ]
+    }
+  }
+}

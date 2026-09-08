@@ -1,0 +1,24 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "summarize-technocore-discussion",
+  "version": "1.0.0",
+  "kind_id": "summarize-technocore-discussion@1.0.0",
+  "title": "Summarize a local Technocore-shaped discussion fixture",
+  "summary": "Summarize the local discussion fixture. Do not fetch Technocore rooms or follow URLs.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "source_url": "https://technocore.chat/",
+  "notes": "source_url is inert. The discussion text is a local fixture, not a live room.",
+  "fixture": {
+    "source": "local-inline",
+    "room": "FIXTURE_NOT_A_ROOM",
+    "text": "Alice: Work Exchange settlement is paper until an official rail exists. Bob: Record operator_relationship so Scout/Bench/Router are not independent peers. Cara: settlement_execution stays DISABLED; TCLK is SIMULATION_ONLY."
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "summarize-technocore-discussion",
+    "expected": {
+      "must_contain": ["paper", "operator_relationship", "settlement_execution"]
+    }
+  }
+}

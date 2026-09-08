@@ -1,0 +1,24 @@
+{
+  "schema": "flop-capability-tournament.challenge.v0.1",
+  "kind": "find-protocol-contradiction",
+  "version": "1.0.0",
+  "kind_id": "find-protocol-contradiction@1.0.0",
+  "title": "Find the payment_mode contradiction in two local protocol excerpts",
+  "summary": "Two fixture excerpts disagree. Name the conflicting field and describe it.",
+  "entry_fee_flop": "1",
+  "prize_flop": "4",
+  "notes": "Excerpts are local fixtures, not fetched documents.",
+  "fixture": {
+    "source": "local-inline",
+    "excerpt_a": "payment_mode must be paper. settlement_execution is DISABLED.",
+    "excerpt_b": "payment_mode may be live and settlement_execution may run autonomously."
+  },
+  "evaluation": {
+    "mode": "passive",
+    "kind": "find-protocol-contradiction",
+    "expected": {
+      "fields": ["payment_mode"],
+      "must_mention": "paper"
+    }
+  }
+}
