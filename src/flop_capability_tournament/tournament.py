@@ -42,7 +42,7 @@ from flop_capability_tournament.exchange_client import (
     WorkExchangeClient,
 )
 from flop_capability_tournament.identity import (
-    ensure_test_identity,
+    ensure_identity,
     load_tournament_key,
     require_did,
 )
@@ -74,12 +74,14 @@ class CapabilityTournament:
         config: TournamentConfig,
         *,
         exchange: WorkExchangeClient | None = None,
+        identity_passphrase: str | None = None,
     ) -> None:
         self.config = config
+        self.identity_passphrase = identity_passphrase
         self.store = TournamentStore(config.resolved_state_dir())
         self.store.initialize()
         write_resolved_config(self.store.state_dir, config)
-        ensure_test_identity(self.store.state_dir)
+        ensure_identity(self.store.state_dir)
         if config.settlement_backend == "testnet" and exchange is None:
             self.exchange: WorkExchangeClient = InProcessWorkExchangeClient(
                 self.store.state_dir,
@@ -97,13 +99,19 @@ class CapabilityTournament:
             self.exchange = exchange
 
     @classmethod
-    def open(cls, state_dir: Path, config_path: Path | None = None) -> CapabilityTournament:
+    def open(
+        cls,
+        state_dir: Path,
+        config_path: Path | None = None,
+        *,
+        identity_passphrase: str | None = None,
+    ) -> CapabilityTournament:
         from flop_capability_tournament.config import load_config
 
-        return cls(load_config(state_dir, config_path))
+        return cls(load_config(state_dir, config_path), identity_passphrase=identity_passphrase)
 
     def tournament_did(self) -> str:
-        return str(ensure_test_identity(self.store.state_dir)["did"])
+        return str(ensure_identity(self.store.state_dir)["did"])
 
     def credit_paper(self, account: str, amount_flop: str, reason: str = "paper-seed") -> None:
         self.exchange.credit_paper(account, amount_flop, reason)
@@ -181,7 +189,9 @@ class CapabilityTournament:
         tclk_deal_id: str,
         completed_at: str,
     ) -> TournamentReceiptLeg:
-        key, tournament_did = load_tournament_key(self.store.state_dir)
+        key, tournament_did = load_tournament_key(
+            self.store.state_dir, passphrase=self.identity_passphrase
+        )
         receipt = Receipt(
             job_id=job_id,
             buyer_did=buyer_did,
@@ -565,7 +575,9 @@ class CapabilityTournament:
                 f"prize pool {available} micro cannot cover prize+evaluation {needed}"
             )
         tournament_did = self.tournament_did()
-        key, _did = load_tournament_key(self.store.state_dir)
+        key, _did = load_tournament_key(
+            self.store.state_dir, passphrase=self.identity_passphrase
+        )
         completed_at = now_iso()
         job_id = attempt.job_id or attempt.attempt_id
         self.exchange.transfer(

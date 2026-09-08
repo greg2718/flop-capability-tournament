@@ -20,6 +20,7 @@ from flop_work_exchange.identity import (
 )
 
 from flop_capability_tournament.constants import (
+    DEFAULT_PRODUCTION_STATE,
     KNOWN_FAMILY_AGENTS,
     TOURNAMENT_OPERATOR_GROUP,
     assert_isolated_state_dir,
@@ -27,8 +28,31 @@ from flop_capability_tournament.constants import (
 )
 from flop_capability_tournament.exceptions import SafetyError, ValidationError
 
+IDENTITY_CONFIRMATION = "CREATE-FLOP-CAPABILITY-TOURNAMENT-IDENTITY"
 TEST_IDENTITY_PEM = "identity-test-only.pem"
 TEST_IDENTITY_JSON = "identity-test-only.json"
+PRODUCTION_IDENTITY_PEM = "identity.pem"
+PRODUCTION_IDENTITY_JSON = "identity.json"
+
+
+def _write_pem(
+    path: Path, key: Ed25519PrivateKey, *, encrypted: bool, passphrase: str | None
+) -> None:
+    if encrypted:
+        if not passphrase:
+            raise SafetyError("encrypted identity requires a passphrase")
+        pem = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.BestAvailableEncryption(passphrase.encode("utf-8")),
+        )
+    else:
+        pem = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    atomic_write_text(path, pem.decode("ascii"), mode=0o600)
 
 
 def _metadata(
@@ -70,33 +94,85 @@ def create_test_identity(state_dir: Path) -> dict[str, Any]:
         raise SafetyError("test identity already exists; refusing to overwrite")
     private_key = generate_key()
     did = public_did(private_key)
-    pem = private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    )
-    atomic_write_text(pem_path, pem.decode("ascii"), mode=0o600)
+    _write_pem(pem_path, private_key, encrypted=False, passphrase=None)
     meta = _metadata(did, purpose="test-only", persistent=False, private_key_path=pem_path)
+    atomic_write_text(json_path, json.dumps(meta, indent=2, sort_keys=True) + "\n", mode=0o600)
+    return meta
+
+
+def create_production_identity(
+    *,
+    state_dir: Path,
+    confirm: str,
+    passphrase: str,
+    passphrase_confirmation: str,
+) -> dict[str, Any]:
+    if confirm != IDENTITY_CONFIRMATION:
+        raise SafetyError("explicit identity creation confirmation value is required")
+    resolved = assert_isolated_state_dir(state_dir)
+    expected = DEFAULT_PRODUCTION_STATE.expanduser().resolve(strict=False)
+    if resolved != expected:
+        raise SafetyError(
+            "production identity state directory must resolve exactly to "
+            "Capability Tournament state"
+        )
+    if passphrase != passphrase_confirmation:
+        raise SafetyError("passphrase confirmation does not match")
+    if len(passphrase) < 16:
+        raise SafetyError("passphrase must be at least 16 characters")
+    resolved.mkdir(mode=0o700, parents=True, exist_ok=True)
+    pem_path = resolved / PRODUCTION_IDENTITY_PEM
+    json_path = resolved / PRODUCTION_IDENTITY_JSON
+    if pem_path.exists() or json_path.exists():
+        raise SafetyError("production identity already exists; refusing to overwrite")
+    key = generate_key()
+    did = public_did(key)
+    _write_pem(pem_path, key, encrypted=True, passphrase=passphrase)
+    meta = _metadata(
+        did,
+        purpose="flop-capability-tournament-production",
+        persistent=True,
+        private_key_path=pem_path,
+    )
     atomic_write_text(json_path, json.dumps(meta, indent=2, sort_keys=True) + "\n", mode=0o600)
     return meta
 
 
 def load_identity_meta(state_dir: Path) -> dict[str, Any]:
     resolved = assert_isolated_state_dir(state_dir)
-    path = resolved / TEST_IDENTITY_JSON
-    if not path.exists():
-        raise ValidationError("no tournament identity found; run identity init or demo")
-    return load_json_object(path)
+    for name in (PRODUCTION_IDENTITY_JSON, TEST_IDENTITY_JSON):
+        path = resolved / name
+        if path.exists():
+            return load_json_object(path)
+    raise ValidationError(
+        "no tournament identity found; run identity init, identity init-production, or demo"
+    )
 
 
-def load_tournament_key(state_dir: Path) -> tuple[Ed25519PrivateKey, str]:
+def load_tournament_key(
+    state_dir: Path, passphrase: str | None = None
+) -> tuple[Ed25519PrivateKey, str]:
     resolved = assert_isolated_state_dir(state_dir)
-    pem_path = resolved / TEST_IDENTITY_PEM
-    if not pem_path.exists():
-        raise ValidationError("no tournament identity found; run identity init or demo")
-    key = load_private_key(pem_path)
-    meta = load_json_object(resolved / TEST_IDENTITY_JSON)
-    return key, str(meta["did"])
+    prod_pem = resolved / PRODUCTION_IDENTITY_PEM
+    test_pem = resolved / TEST_IDENTITY_PEM
+    if prod_pem.exists():
+        try:
+            key = load_private_key(prod_pem, passphrase=passphrase)
+        except TypeError as exc:
+            raise ValidationError(
+                "encrypted production identity requires a passphrase"
+            ) from exc
+        except ValueError as exc:
+            raise ValidationError("unable to decrypt production identity PEM") from exc
+        meta = load_json_object(resolved / PRODUCTION_IDENTITY_JSON)
+        return key, str(meta["did"])
+    if test_pem.exists():
+        key = load_private_key(test_pem)
+        meta = load_json_object(resolved / TEST_IDENTITY_JSON)
+        return key, str(meta["did"])
+    raise ValidationError(
+        "no tournament identity found; run identity init, identity init-production, or demo"
+    )
 
 
 def ensure_test_identity(state_dir: Path) -> dict[str, Any]:
@@ -107,11 +183,25 @@ def ensure_test_identity(state_dir: Path) -> dict[str, Any]:
     return create_test_identity(resolved)
 
 
+def ensure_identity(state_dir: Path) -> dict[str, Any]:
+    resolved = assert_isolated_state_dir(state_dir)
+    prod_json = resolved / PRODUCTION_IDENTITY_JSON
+    test_json = resolved / TEST_IDENTITY_JSON
+    if prod_json.exists() or test_json.exists():
+        return load_identity_meta(resolved)
+    return create_test_identity(resolved)
+
+
 __all__ = [
+    "IDENTITY_CONFIRMATION",
+    "PRODUCTION_IDENTITY_JSON",
+    "PRODUCTION_IDENTITY_PEM",
     "TEST_IDENTITY_JSON",
     "TEST_IDENTITY_PEM",
     "create_ephemeral_party",
+    "create_production_identity",
     "create_test_identity",
+    "ensure_identity",
     "ensure_test_identity",
     "generate_key",
     "is_valid_ed25519_did",

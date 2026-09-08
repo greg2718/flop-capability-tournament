@@ -16,7 +16,11 @@ from flop_capability_tournament.constants import DEFAULT_PRODUCTION_STATE
 from flop_capability_tournament.credentials import router_capability_claim, verify_credential
 from flop_capability_tournament.demo import run_demo
 from flop_capability_tournament.exceptions import WorkExchangeError
-from flop_capability_tournament.identity import create_test_identity, load_identity_meta
+from flop_capability_tournament.identity import (
+    create_production_identity,
+    create_test_identity,
+    load_identity_meta,
+)
 from flop_capability_tournament.models import load_challenge_file
 from flop_capability_tournament.tournament import CapabilityTournament
 
@@ -69,6 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
     identity = sub.add_parser("identity", help="Tournament Ed25519 / did:key identity")
     identity_sub = identity.add_subparsers(dest="identity_cmd", required=True)
     identity_sub.add_parser("init", help="Create a test-only identity in --state-dir")
+    prod = identity_sub.add_parser("init-production", help="Gated production identity (encrypted)")
+    prod.add_argument("--confirm", required=True)
     identity_sub.add_parser("show", help="Show public identity metadata")
 
     publish = sub.add_parser("publish-challenge", help="Bench publishes a versioned challenge")
@@ -161,6 +167,20 @@ def _dispatch(args: argparse.Namespace) -> int:
         state_dir = _require_state_dir(args)
         if args.identity_cmd == "init":
             _print_json(create_test_identity(state_dir))
+            return 0
+        if args.identity_cmd == "init-production":
+            import getpass
+
+            first = getpass.getpass("New FLOP Capability Tournament identity passphrase: ")
+            second = getpass.getpass("Confirm passphrase: ")
+            _print_json(
+                create_production_identity(
+                    state_dir=state_dir,
+                    confirm=args.confirm,
+                    passphrase=first,
+                    passphrase_confirmation=second,
+                )
+            )
             return 0
         if args.identity_cmd == "show":
             _print_json(load_identity_meta(state_dir))
