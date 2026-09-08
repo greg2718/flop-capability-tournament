@@ -41,6 +41,22 @@ and Foundry. The intended production path is
 `~/.flop_agents/capability-tournament/`. Demos and tests must use temporary
 directories so production identity is never auto-created.
 
+Production identity is gated the same way as Work Exchange: `identity init`
+refuses `~/.flop_agents/capability-tournament/`. Create a long-lived encrypted
+identity only with explicit confirmation (getpass; PEM is PKCS#8 encrypted;
+`identity.json` is persistent public metadata). `identity show` prefers
+`identity.json` over the test-only file and loads whatever DID is stored
+there:
+
+```bash
+flop-capability-tournament --state-dir ~/.flop_agents/capability-tournament \
+  identity init-production --confirm CREATE-FLOP-CAPABILITY-TOURNAMENT-IDENTITY
+flop-capability-tournament --state-dir ~/.flop_agents/capability-tournament identity show
+```
+
+The tournament Ed25519 `did:key` signs paper receipts, local artifacts, and
+EvidenceCredentials. It is not a token wallet or airdrop claim address.
+
 ## Lifecycle
 
 ```text
@@ -217,6 +233,9 @@ balances; nothing is claimed as real FLOP.
 
 ```bash
 flop-capability-tournament --state-dir /tmp/tournament identity init
+flop-capability-tournament --state-dir /tmp/tournament identity show
+flop-capability-tournament --state-dir ~/.flop_agents/capability-tournament \
+  identity init-production --confirm CREATE-FLOP-CAPABILITY-TOURNAMENT-IDENTITY
 flop-capability-tournament --state-dir /tmp/tournament paper-credit --account did:key:... --amount-flop 10
 flop-capability-tournament --state-dir /tmp/tournament publish-challenge --publisher-did ... --spec examples/challenges/extract-structured-info.json
 flop-capability-tournament --state-dir /tmp/tournament list-challenges

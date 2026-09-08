@@ -91,6 +91,7 @@ def test_help_lists_required_commands() -> None:
         "award",
         "show-credential",
         "demo",
+        "identity",
     ):
         assert command in text
 
