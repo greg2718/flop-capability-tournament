@@ -11,8 +11,8 @@ from typing import Any
 from flop_work_exchange.receipts import verify_receipt
 
 from flop_capability_tournament import __version__
-from flop_capability_tournament.config import load_config
-from flop_capability_tournament.constants import DEFAULT_PRODUCTION_STATE
+from flop_capability_tournament.config import AdapterConfig, load_adapter_config, load_config
+from flop_capability_tournament.constants import DEFAULT_PRODUCTION_STATE, MAX_CLI_JSON_CHARS
 from flop_capability_tournament.credentials import router_capability_claim, verify_credential
 from flop_capability_tournament.demo import run_demo
 from flop_capability_tournament.exceptions import WorkExchangeError
@@ -22,11 +22,20 @@ from flop_capability_tournament.identity import (
     load_identity_meta,
 )
 from flop_capability_tournament.models import load_challenge_file
+from flop_capability_tournament.ops import doctor, run_live_demo
 from flop_capability_tournament.tournament import CapabilityTournament
 
 
-def _print_json(value: Any) -> None:
-    print(json.dumps(value, indent=2, sort_keys=True, default=str))
+def _print_json(value: Any, *, max_chars: int | None = None) -> None:
+    text = json.dumps(value, indent=2, sort_keys=True, default=str)
+    if max_chars is not None and len(text) > max_chars:
+        text = text[:max_chars].rstrip() + "\n... [truncated]"
+    print(text)
+
+
+def _adapter_config_from_args(args: argparse.Namespace) -> AdapterConfig:
+    config_path = Path(args.config) if getattr(args, "config", None) else None
+    return load_adapter_config(config_path)
 
 
 def _require_state_dir(args: argparse.Namespace) -> Path:
@@ -141,6 +150,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional temp/state dir; created if omitted",
     )
+    live_demo = sub.add_parser(
+        "live-demo",
+        help="Paper challenge preferring local Scout/Bench/Router/Sentinel adapters",
+    )
+    live_demo.add_argument(
+        "--state-dir",
+        dest="demo_state_dir",
+        type=Path,
+        default=None,
+        help="Optional temp/state dir; created if omitted",
+    )
+    doc = sub.add_parser(
+        "doctor",
+        help="Check adapter modes, paths, identity, and state isolation",
+    )
+    doc.add_argument(
+        "--state-dir",
+        dest="doctor_state_dir",
+        type=Path,
+        default=None,
+        help="Optional state dir to inspect (not created)",
+    )
     return parser
 
 
@@ -162,6 +193,30 @@ def _dispatch(args: argparse.Namespace) -> int:
         result = run_demo(Path(state_dir))
         _print_json(result)
         return 0 if result.get("ok") else 2
+
+    if args.cmd == "live-demo":
+        state_dir = args.demo_state_dir or args.state_dir
+        if state_dir is None:
+            state_dir = Path(tempfile.mkdtemp(prefix="flop-capability-tournament-live-demo-"))
+        result = run_live_demo(
+            Path(state_dir),
+            adapter_config=_adapter_config_from_args(args),
+            config_path=Path(args.config) if getattr(args, "config", None) else None,
+        )
+        _print_json(result, max_chars=MAX_CLI_JSON_CHARS)
+        ok = bool(result.get("ok")) and bool(result.get("verification", {}).get("ok"))
+        return 0 if ok else 2
+
+    if args.cmd == "doctor":
+        state_dir = args.doctor_state_dir or args.state_dir
+        config_path = Path(args.config) if getattr(args, "config", None) else None
+        report = doctor(
+            state_dir=Path(state_dir) if state_dir is not None else None,
+            adapter_config=_adapter_config_from_args(args),
+            config_path=config_path,
+        )
+        _print_json(report)
+        return 0 if report.get("ok") else 1
 
     if args.cmd == "identity":
         state_dir = _require_state_dir(args)

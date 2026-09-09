@@ -23,6 +23,38 @@ WORK_EXCHANGE_STATE = Path.home() / ".flop_agents" / "work-exchange"
 FOUNDRY_STATE = Path.home() / ".flop_agents" / "code-bounty-foundry"
 LEGACY_SCOUT_STATE = Path.home() / ".flop_scout"
 
+# Greg's local Mac checkouts (paper ops only; not payment rails).
+DEFAULT_DEV_ROOT = Path.home() / "dev"
+MAC_SCOUT_REPO = DEFAULT_DEV_ROOT / "flop_scout_v02"
+MAC_BENCH_REPO = DEFAULT_DEV_ROOT / "flop_bench"
+MAC_ROUTER_REPO = DEFAULT_DEV_ROOT / "flop-router"
+MAC_SENTINEL_REPO = DEFAULT_DEV_ROOT / "flop_sentinel"
+
+SCOUT_EVIDENCE_FEED_CLI = (
+    "python flop_scout.py evidence feed --since-id 0 --format jsonl"
+)
+ROUTER_DECISION_CLI = (
+    "python router.py [--db <projection.sqlite>] decision create <task> "
+    "--output <file> [--fixture fixtures/evidence_consistency.jsonl] "
+    "--job-id <id> --job-proto flop-work-exchange.job.v0.1 "
+    "--verification-mode OBJECTIVE_BENCH --asset FLOP --max-amount <micro>"
+)
+ROUTER_FIXTURE_RELATIVE = Path("fixtures") / "evidence_consistency.jsonl"
+# Router V1 cannot consume the raw Scout warehouse (~52GiB). Live Router needs a
+# Scout→Router projection ≤1GiB (V2), or the synthetic JSONL fixture.
+ROUTER_V1_MAX_DB_BYTES = 1024 * 1024 * 1024
+# Tournament must not GROUP BY the raw Scout observer warehouse. Prefer a
+# Scout projection (same 1GiB cap as Router) or evidence JSONL. Configurable
+# via adapters.scout_max_db_bytes / FLOP_CT_SCOUT_MAX_DB_BYTES.
+SCOUT_MAX_QUERY_DB_BYTES = ROUTER_V1_MAX_DB_BYTES
+DEFAULT_SCOUT_SQLITE_TIMEOUT_SECONDS = 5.0
+SCOUT_WAREHOUSE_DB_NAME = "observer.sqlite"
+SCOUT_PROJECTION_FILENAMES = ("scout_projection.sqlite", "projection.sqlite")
+DEFAULT_SCOUT_CANDIDATE_LIMIT = 25
+MAX_SCOUT_CANDIDATE_LIMIT = 1000
+MAX_EVIDENCE_IDS_PER_CANDIDATE = 8
+MAX_CLI_JSON_CHARS = 64_000
+
 TOURNAMENT_FEE_ACCOUNT = "tournament-management-fees"
 BENCH_FEE_ACCOUNT = "bench-evaluation-fees"
 
@@ -92,14 +124,31 @@ __all__ = [
     "BENCH_FEE_ACCOUNT",
     "BENCH_STATE",
     "CHALLENGE_KINDS",
+    "DEFAULT_DEV_ROOT",
     "DEFAULT_PRODUCTION_STATE",
+    "DEFAULT_SCOUT_CANDIDATE_LIMIT",
+    "DEFAULT_SCOUT_SQLITE_TIMEOUT_SECONDS",
     "FOUNDRY_STATE",
     "KNOWN_FAMILY_AGENTS",
     "KNOWN_FAMILY_DIDS",
+    "MAC_BENCH_REPO",
+    "MAC_ROUTER_REPO",
+    "MAC_SCOUT_REPO",
+    "MAC_SENTINEL_REPO",
+    "MAX_CLI_JSON_CHARS",
+    "MAX_EVIDENCE_IDS_PER_CANDIDATE",
+    "MAX_SCOUT_CANDIDATE_LIMIT",
+    "ROUTER_DECISION_CLI",
     "ROUTER_DID",
+    "ROUTER_FIXTURE_RELATIVE",
     "ROUTER_STATE",
+    "ROUTER_V1_MAX_DB_BYTES",
     "SCOUT_DID",
+    "SCOUT_EVIDENCE_FEED_CLI",
+    "SCOUT_MAX_QUERY_DB_BYTES",
+    "SCOUT_PROJECTION_FILENAMES",
     "SCOUT_STATE",
+    "SCOUT_WAREHOUSE_DB_NAME",
     "SENTINEL_DID",
     "SENTINEL_STATE",
     "TOURNAMENT_FEE_ACCOUNT",

@@ -71,6 +71,15 @@ def test_cli_list_challenges_after_demo(
     assert cred["verification"]["ok"] is True
 
 
+def test_cli_doctor_stubs_ok(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--state-dir", str(tmp_path), "doctor"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True
+    assert report["payment_mode"] == "paper"
+    assert report["settlement_execution"] == "DISABLED"
+    assert report["adapter_modes"]["scout"] == "stub"
+
+
 def test_help_lists_required_commands() -> None:
     import io
     from contextlib import redirect_stdout
@@ -91,6 +100,8 @@ def test_help_lists_required_commands() -> None:
         "award",
         "show-credential",
         "demo",
+        "live-demo",
+        "doctor",
         "identity",
     ):
         assert command in text

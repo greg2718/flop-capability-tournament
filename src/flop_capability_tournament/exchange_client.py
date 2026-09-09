@@ -8,16 +8,11 @@ used if the git dependency is later swapped for a remote client.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 
-from flop_work_exchange.adapters.bench import StubBenchAdapter
-from flop_work_exchange.adapters.router import StubRouterAdapter
-from flop_work_exchange.adapters.scout import StubScoutAdapter
-from flop_work_exchange.adapters.sentinel import StubSentinelAdapter
 from flop_work_exchange.adapters.settlement import PaperSettlement, TestnetSettlement
 from flop_work_exchange.adapters.tclk import StubTclkAdapter
 from flop_work_exchange.config import ExchangeConfig, FeeSchedule, PolicyConfig
-from flop_work_exchange.constants import KNOWN_FAMILY_DIDS
 from flop_work_exchange.exceptions import NotLiveError
 from flop_work_exchange.exchange import WorkExchange
 from flop_work_exchange.identity import ensure_test_identity as ensure_exchange_identity
@@ -29,6 +24,17 @@ from flop_work_exchange.models import (
     SentinelVerdict,
     WorkerCandidate,
 )
+
+from flop_capability_tournament.adapters.bench import LocalBenchAdapter, StubBenchAdapter
+from flop_capability_tournament.adapters.router import LocalRouterAdapter, StubRouterAdapter
+from flop_capability_tournament.adapters.scout import LocalScoutAdapter, StubScoutAdapter
+from flop_capability_tournament.adapters.sentinel import LocalSentinelAdapter, StubSentinelAdapter
+from flop_capability_tournament.constants import KNOWN_FAMILY_DIDS
+
+ScoutKind = StubScoutAdapter | LocalScoutAdapter
+RouterKind = StubRouterAdapter | LocalRouterAdapter
+SentinelKind = StubSentinelAdapter | LocalSentinelAdapter
+BenchKind = StubBenchAdapter | LocalBenchAdapter
 
 
 class WorkExchangeClient(Protocol):
@@ -105,10 +111,10 @@ class InProcessWorkExchangeClient:
         self,
         state_dir: Path,
         *,
-        bench: StubBenchAdapter | None = None,
-        scout: StubScoutAdapter | None = None,
-        router: StubRouterAdapter | None = None,
-        sentinel: StubSentinelAdapter | None = None,
+        bench: BenchKind | None = None,
+        scout: ScoutKind | None = None,
+        router: RouterKind | None = None,
+        sentinel: SentinelKind | None = None,
         settlement_backend: str = "paper",
         policy: PolicyConfig | None = None,
         known_family_dids: frozenset[str] | None = None,
@@ -140,6 +146,38 @@ class InProcessWorkExchangeClient:
         )
         ensure_exchange_identity(wx_dir)
         self.exchange = self._wx
+
+    @property
+    def scout(self) -> ScoutKind:
+        return cast(ScoutKind, self._wx.scout)
+
+    @scout.setter
+    def scout(self, value: ScoutKind) -> None:
+        self._wx.scout = value
+
+    @property
+    def router(self) -> RouterKind:
+        return cast(RouterKind, self._wx.router)
+
+    @router.setter
+    def router(self, value: RouterKind) -> None:
+        self._wx.router = value
+
+    @property
+    def sentinel(self) -> SentinelKind:
+        return cast(SentinelKind, self._wx.sentinel)
+
+    @sentinel.setter
+    def sentinel(self, value: SentinelKind) -> None:
+        self._wx.sentinel = value
+
+    @property
+    def bench(self) -> BenchKind:
+        return cast(BenchKind, self._wx.bench)
+
+    @bench.setter
+    def bench(self, value: BenchKind) -> None:
+        self._wx.bench = value
 
     def exchange_did(self) -> str:
         return self._wx.exchange_did()

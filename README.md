@@ -132,19 +132,28 @@ If the Git dependency is awkward for a downstream packager, keep the protocol
 and point a future client at a real Exchange process — do not fork-copy the
 marketplace.
 
-## Adapters (interfaces only)
+## Adapters (stub default, local optional)
 
-This package does **not** reimplement Scout, Bench, Router, or Sentinel.
+This package does **not** reimplement Scout, Bench, Router, or Sentinel. **Stub**
+adapters are the default (CI/offline). **Local** adapters can be selected via
+YAML or `FLOP_CT_*_MODE=local` and fail closed if the sibling backend is
+missing — stub success is never labeled as live.
 
-| Adapter | Sibling | Stub behavior | Later plug-in |
+Challenge **kind evaluation** stays on `ChallengeBenchAdapter` (passive JSON/text
+checks against local fixtures). Work Exchange paid-leg `verify` uses
+`StubBenchAdapter` (hash check) or `LocalBenchAdapter` (`flop-bench verify` with
+a temp `--state-dir`).
+
+| Adapter | Sibling | Stub behavior | Local wiring |
 | --- | --- | --- | --- |
-| Scout | [flop-scout](https://github.com/greg2718/flop-scout) | Reuses Work Exchange Scout stub | `python flop_scout.py evidence feed ...` |
-| Router | [flop-router](https://github.com/greg2718/flop-router) | Lowest in-budget offer → QUALIFIED_PLAN | Wrap `plan-execution` / `decision create` |
-| Sentinel | local `flop_sentinel` (not published) | Artifact in → ALLOW / REVIEW / REJECT | Call Sentinel’s pure library |
-| Bench | [flop-bench](https://github.com/greg2718/flop-bench) | Kind-specific passive JSON/text checks against local fixtures; no URL fetch; no local exec | `flop-bench verify --state-dir ...` |
+| Scout | [flop-scout](https://github.com/greg2718/flop-scout) | Optional local evidence JSONL; never opens a network socket | Prefers `scout_evidence_jsonl`, then a ≤1GiB `scout_projection_db`, then `python flop_scout.py evidence feed --since-id 0 --format jsonl` (timed). Raw `observer.sqlite` is used only when under the size cap, with a sqlite wall-clock timeout; oversized warehouses fail closed. Caps candidates (default 25). Family DIDs in Scout output are not independent jurors |
+| Router | [flop-router](https://github.com/greg2718/flop-router) | Lowest in-budget offer → QUALIFIED_PLAN | Subprocess `router.py [--db projection] decision create --output … [--fixture …]`; maps `work_route` / plans; forces `SIMULATION_ONLY` / `DISABLED`. Probe fails closed unless a ≤1GiB db or fixture is usable. Never opens the ~52GiB Scout warehouse as router db |
+| Sentinel | local `flop_sentinel` (not published) | Artifact in → `ALLOW` / `REVIEW` / `REJECT`; fail-closed | Import `flop_sentinel.policy` (not `getattr` after a bare import). Build `Message` + `normalize` → `detectors.base.run_all(ALL_DETECTORS, …)` → `policy.decide` with typed `Provenance.UNSIGNED` (never invent `Provenance.LOCAL`) and Affiliation `SELF_OPERATED` / `UNKNOWN`. Findings are **rule ids only**. Do not call `detect(text)` |
+| Bench | [flop-bench](https://github.com/greg2718/flop-bench) | Kind checks (tournament) plus hash check (paid-leg verify); no local exec | Generates a passive spec and runs `flop-bench verify --state-dir <temp>`; `--allow-local-exec` only if explicitly enabled |
+| TCLK | Work Exchange paper adapter | Records `tclk-paper-*` deal ids | Still `SIMULATION_ONLY` |
 | Settlement | Work Exchange | `PaperSettlement` ledger debit/credit | `TestnetSettlement` always raises `NotLiveError` |
 
-Known family DIDs (same operator; never independent peers or independent judges):
+Known family DIDs (same operator; never independent peers, independent judges, or independent jurors):
 
 ```text
 FLOP Scout    did:key:z6MkfJnczowbivU9SEDcZ77MEpKUfQTVbcD3i1gcwsfo4yL1
@@ -156,7 +165,97 @@ FLOP Sentinel UNKNOWN_NOT_PROVISIONED
 State isolation: the tournament must not use `~/.flop_agents/scout`,
 `~/.flop_agents/bench`, `~/.flop_agents/router`, `~/.flop_agents/sentinel`,
 `~/.flop_agents/work-exchange`, or `~/.flop_agents/code-bounty-foundry` as
-*its* `--state-dir`.
+*its* `--state-dir`. Live Bench verify uses its **own** temp `--state-dir`.
+
+## Going live (paper ops)
+
+This is **not** a payment go-live. `payment_mode` stays `"paper"`. TCLK stays
+`SIMULATION_ONLY`. `settlement_execution` stays `DISABLED`. Local adapters wire
+Greg’s Mac Scout / Bench / Router / Sentinel checkouts behind the existing
+interfaces.
+
+### Mac paths
+
+```text
+~/dev/flop_scout_v02      FLOP Scout (flop_scout.py, state ~/.flop_scout)
+~/dev/flop_bench          FLOP Bench (flop-bench CLI, state ~/.flop_agents/bench)
+~/dev/flop-router         FLOP Router (router.py, state ~/.flop_agents/router)
+~/dev/flop_sentinel       unpublished flop_sentinel library
+```
+
+### Selecting local adapters
+
+Pass the YAML so `doctor` / `live-demo` load the same AdapterConfig as other
+commands. `FLOP_CT_*` environment variables still override file values when set.
+
+```bash
+flop-capability-tournament --config examples/live-ops.yaml doctor
+flop-capability-tournament --config examples/live-ops.yaml --state-dir /tmp/ct-live live-demo
+```
+
+Environment (overrides `examples/live-ops.yaml`):
+
+```bash
+export FLOP_CT_SCOUT_MODE=local
+export FLOP_CT_BENCH_MODE=local
+export FLOP_CT_ROUTER_MODE=local
+export FLOP_CT_SENTINEL_MODE=local
+export FLOP_CT_SCOUT_REPO=~/dev/flop_scout_v02
+export FLOP_SCOUT_STATE_DIR=~/.flop_scout
+export FLOP_CT_SCOUT_CANDIDATE_LIMIT=25
+# Live Scout: prefer evidence JSONL or a ≤1GiB Scout projection. Do not query
+# the raw ~/.flop_scout/observer.sqlite warehouse (~48–52GiB); GROUP BY hangs.
+# export FLOP_CT_SCOUT_EVIDENCE_JSONL=/path/to/evidence.jsonl
+# export FLOP_CT_SCOUT_PROJECTION_DB=~/.flop_scout/scout_projection.sqlite
+# export FLOP_CT_SCOUT_SQLITE_TIMEOUT=5
+# export FLOP_CT_SCOUT_MAX_DB_BYTES=1073741824
+export FLOP_CT_BENCH_REPO=~/dev/flop_bench
+export FLOP_CT_BENCH_ALLOW_LOCAL_EXEC=false   # default; do not enable casually
+export FLOP_CT_ROUTER_REPO=~/dev/flop-router
+# Live Router: a Scout→Router projection ≤1GiB (V2). Do not pass the raw
+# Scout observer.sqlite warehouse (~52GiB); Router V1 max is 1GiB.
+export FLOP_CT_ROUTER_DB=/path/to/router-projection.sqlite
+# Synthetic paper-ops (flop-router bundled fixture) when no projection exists:
+export FLOP_CT_ROUTER_FIXTURE=~/dev/flop-router/fixtures/evidence_consistency.jsonl
+export FLOP_CT_SENTINEL_PATH=~/dev/flop_sentinel
+```
+
+Stubs remain the default when modes are unset, so CI stays offline.
+
+**Scout source preference:** configured evidence JSONL, then a Scout projection
+DB ≤1GiB (`scout_projection_db`, or `scout_projection.sqlite` /
+`projection.sqlite` under `scout_state_dir`), then the timed evidence-feed CLI,
+then a small observer sqlite. Raw `observer.sqlite` warehouses (~48–52GiB) are
+**not** queried.
+
+Sentinel contract (paper artifacts are unsigned; do not invent `Provenance.LOCAL`):
+
+- `from flop_sentinel.policy import decide` via `importlib.import_module`
+  (`getattr(flop_sentinel, "policy")` is not enough when `__init__.py` is empty).
+- `Message(raw=bytes, …)` then `nt = normalize(message.raw.decode("utf-8"))`.
+- Prefer `detectors.base.run_all(ALL_DETECTORS, message, nt, now)`; otherwise
+  `detect(message, nt, now)` — never `detect(text)`.
+- `policy.decide(findings, Provenance.UNSIGNED, Affiliation.UNKNOWN|SELF_OPERATED, …)`.
+- Mapped verdict findings are **rule ids only**.
+
+### Doctor and live-demo
+
+```bash
+flop-capability-tournament --config examples/live-ops.yaml doctor
+flop-capability-tournament --state-dir /tmp/ct --config examples/live-ops.yaml doctor
+flop-capability-tournament --config examples/live-ops.yaml --state-dir /tmp/ct-live live-demo
+```
+
+`doctor` reports adapter modes, path probes, identity (public metadata only),
+isolation, and the no-self-validation / no-independent-family-judge rules. It
+loads AdapterConfig from `--config` when given. `live-demo` runs **one** paper
+challenge (`extract-structured-info`), preferring local adapters that probe OK
+and falling back to stubs with explicit `adapter_notes`. Mid-run adapter errors
+set `"ok": false` and a **non-zero** process exit even if a stub fallback still
+mints a credential. It uses ephemeral demo DIDs (not family DIDs) so
+same-operator Scout/Bench/Router identities are not presented as independent
+agents, jurors, or judges. Publisher and agent are distinct (no synthetic
+self-deal). Settlement stays paper / `DISABLED`.
 
 ## How Router can later consume EvidenceCredentials
 
@@ -246,6 +345,8 @@ flop-capability-tournament --state-dir /tmp/tournament evaluate --attempt-id FLO
 flop-capability-tournament --state-dir /tmp/tournament award --attempt-id ...
 flop-capability-tournament --state-dir /tmp/tournament show-credential --attempt-id ...
 python -m flop_capability_tournament demo --state-dir /tmp/tournament-demo
+flop-capability-tournament --config examples/live-ops.yaml doctor
+flop-capability-tournament --config examples/live-ops.yaml --state-dir /tmp/ct-live live-demo
 ```
 
 ## Related agents
