@@ -16,7 +16,16 @@ from flop_work_exchange.policy import (
 )
 from flop_work_exchange.receipts import sign_receipt, verify_receipt
 
-from flop_capability_tournament.adapters.bench import evaluate_attempt
+from flop_capability_tournament.adapters.bench import (
+    ChallengeBenchAdapter,
+    LocalBenchAdapter,
+    StubBenchAdapter,
+    evaluate_attempt,
+)
+from flop_capability_tournament.adapters.factory import resolve_adapters
+from flop_capability_tournament.adapters.router import LocalRouterAdapter, StubRouterAdapter
+from flop_capability_tournament.adapters.scout import LocalScoutAdapter, StubScoutAdapter
+from flop_capability_tournament.adapters.sentinel import LocalSentinelAdapter, StubSentinelAdapter
 from flop_capability_tournament.config import TournamentConfig, write_resolved_config
 from flop_capability_tournament.constants import (
     BENCH_DID,
@@ -75,6 +84,10 @@ class CapabilityTournament:
         *,
         exchange: WorkExchangeClient | None = None,
         identity_passphrase: str | None = None,
+        scout: StubScoutAdapter | LocalScoutAdapter | None = None,
+        router: StubRouterAdapter | LocalRouterAdapter | None = None,
+        sentinel: StubSentinelAdapter | LocalSentinelAdapter | None = None,
+        bench: StubBenchAdapter | LocalBenchAdapter | None = None,
     ) -> None:
         self.config = config
         self.identity_passphrase = identity_passphrase
@@ -82,21 +95,81 @@ class CapabilityTournament:
         self.store.initialize()
         write_resolved_config(self.store.state_dir, config)
         ensure_identity(self.store.state_dir)
+        bundle = resolve_adapters(config.adapters)
+        scout_adapter = scout if scout is not None else bundle.scout
+        router_adapter = router if router is not None else bundle.router
+        sentinel_adapter = sentinel if sentinel is not None else bundle.sentinel
+        bench_adapter = bench if bench is not None else bundle.bench
         if config.settlement_backend == "testnet" and exchange is None:
             self.exchange: WorkExchangeClient = InProcessWorkExchangeClient(
                 self.store.state_dir,
                 settlement_backend="testnet",
                 policy=config.policy,
                 known_family_dids=config.known_family_dids,
+                scout=scout_adapter,
+                router=router_adapter,
+                sentinel=sentinel_adapter,
+                bench=bench_adapter,
             )
         elif exchange is None:
             self.exchange = InProcessWorkExchangeClient(
                 self.store.state_dir,
                 policy=config.policy,
                 known_family_dids=config.known_family_dids,
+                scout=scout_adapter,
+                router=router_adapter,
+                sentinel=sentinel_adapter,
+                bench=bench_adapter,
             )
         else:
             self.exchange = exchange
+        self.challenge_bench = ChallengeBenchAdapter(
+            self._lookup_attempt,
+            allow_local_exec=config.allow_local_exec,
+        )
+
+    def _lookup_attempt(self, job_id: str) -> tuple[Challenge, Attempt] | None:
+        for attempt in self.store.list_attempts():
+            if attempt.job_id == job_id:
+                return self.store.load_challenge(attempt.challenge_id), attempt
+        return None
+
+    def _client(self) -> InProcessWorkExchangeClient:
+        if not isinstance(self.exchange, InProcessWorkExchangeClient):
+            raise AdapterError("adapter swap requires the in-process Work Exchange client")
+        return self.exchange
+
+    @property
+    def scout(self) -> StubScoutAdapter | LocalScoutAdapter:
+        return self._client().scout
+
+    @scout.setter
+    def scout(self, value: StubScoutAdapter | LocalScoutAdapter) -> None:
+        self._client().scout = value
+
+    @property
+    def router(self) -> StubRouterAdapter | LocalRouterAdapter:
+        return self._client().router
+
+    @router.setter
+    def router(self, value: StubRouterAdapter | LocalRouterAdapter) -> None:
+        self._client().router = value
+
+    @property
+    def sentinel(self) -> StubSentinelAdapter | LocalSentinelAdapter:
+        return self._client().sentinel
+
+    @sentinel.setter
+    def sentinel(self, value: StubSentinelAdapter | LocalSentinelAdapter) -> None:
+        self._client().sentinel = value
+
+    @property
+    def bench(self) -> StubBenchAdapter | LocalBenchAdapter:
+        return self._client().bench
+
+    @bench.setter
+    def bench(self, value: StubBenchAdapter | LocalBenchAdapter) -> None:
+        self._client().bench = value
 
     @classmethod
     def open(

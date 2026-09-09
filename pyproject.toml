@@ -49,3 +49,6 @@ packages = ["flop_capability_tournament"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "live: optional tests against installed sibling Scout/Bench/Router/Sentinel",
+]
